@@ -1,0 +1,19 @@
+name: Receive Form Submission
+
+on:
+  repository_dispatch:
+    types:
+      - gform-submission
+
+jobs:
+  receive:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Print received submission
+        env:
+          PAYLOAD: ${{ toJson(github.event.client_payload) }}
+        run: |
+          echo "=== RECEIVED FORM SUBMISSION ==="
+          echo "$PAYLOAD"
+          echo "================================"
