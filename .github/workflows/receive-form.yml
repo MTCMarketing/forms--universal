@@ -10,10 +10,50 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Print received submission
+      - name: Receive and decrypt submission
         env:
-          PAYLOAD: ${{ toJson(github.event.client_payload) }}
+          ENCRYPTED_CODE: ${{ github.event.client_payload.encrypted_code }}
+          DECODER: ${{ secrets.DECODER }}
+
         run: |
-          echo "=== RECEIVED FORM SUBMISSION ==="
-          echo "$PAYLOAD"
-          echo "================================"
+          cat > /tmp/decode.mjs <<'EOF'
+          import crypto from "crypto";
+
+          const encryptedCode = process.env.ENCRYPTED_CODE;
+          const privateKey = process.env.DECODER;
+
+          if (!encryptedCode) {
+            throw new Error("No encrypted_code received");
+          }
+
+          if (!privateKey) {
+            throw new Error("DECODER secret is missing");
+          }
+
+          const parsed = JSON.parse(encryptedCode);
+
+          if (!Array.isArray(parsed.chunks)) {
+            throw new Error("Payload does not contain chunks[]");
+          }
+
+          const decryptedChunks = parsed.chunks.map((chunk) => {
+            return crypto.privateDecrypt(
+              {
+                key: privateKey,
+                padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
+                oaepHash: "sha256",
+              },
+              Buffer.from(chunk, "base64")
+            );
+          });
+
+          const plaintext = Buffer
+            .concat(decryptedChunks)
+            .toString("utf8");
+
+          console.log("=== DECRYPTED FORM SUBMISSION ===");
+          console.log(plaintext);
+          console.log("=================================");
+          EOF
+
+          node /tmp/decode.mjs
