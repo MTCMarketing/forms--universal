@@ -8,23 +8,18 @@ on:
     types:
       - gform-submission
 
-permissions:
-  contents: read
-  issues: write
-
 jobs:
   receive:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Decrypt submission and create issue
+      - name: Receive and decrypt submission
         env:
           ENCRYPTED_CODE: ${{ github.event.client_payload.encrypted_code }}
           DECODER: ${{ secrets.DECODER }}
-          GH_TOKEN: ${{ github.token }}
 
         run: |
-          cat > /tmp/process.mjs <<'EOF'
+          cat > /tmp/decode.mjs <<'EOF'
           import crypto from "crypto";
           import fs from "fs";
 
@@ -131,90 +126,41 @@ jobs:
 
 
           // --------------------------------------------------
-          // 6. BUILD ISSUE
+          // 6. SAVE RESULT FOR SHELL
           // --------------------------------------------------
 
-          const title = submission.tag;
-
-          /*
-           * Keep the raw tag at the very beginning.
-           * This gives the eventual email parser a predictable
-           * marker before the JSON.
-           */
-
-          const body =
-          `${submission.tag}
-
-          \`\`\`json
-          ${JSON.stringify(submission, null, 2)}
-          \`\`\`
-          `;
-
           fs.writeFileSync(
-            "/tmp/issue-title.txt",
-            title
+            "/tmp/tag.txt",
+            submission.tag
           );
 
           fs.writeFileSync(
-            "/tmp/issue-body.txt",
-            body
+            "/tmp/submission.json",
+            JSON.stringify(submission)
           );
 
-          debug("9. Issue title", title);
-          debug("10. Issue body", body);
-
-          debug("11. Ready to create GitHub issue");
+          console.log("");
+          console.log("=== DECRYPTED FORM SUBMISSION ===");
+          console.log(JSON.stringify(submission));
+          console.log("=================================");
           EOF
 
-          node /tmp/process.mjs
+          node /tmp/decode.mjs
 
 
           # --------------------------------------------------
-          # DEBUG
+          # 7. DELIBERATELY FAIL
           # --------------------------------------------------
 
-          if [ "$DEBUG" = "true" ]; then
-            echo ""
-            echo "========================================"
-            echo "[DEBUG] ISSUE ABOUT TO BE CREATED"
-            echo "========================================"
-
-            echo ""
-            echo "Repository:"
-            echo "$GITHUB_REPOSITORY"
-
-            echo ""
-            echo "Title:"
-            cat /tmp/issue-title.txt
-
-            echo ""
-            echo "Body:"
-            cat /tmp/issue-body.txt
-
-            echo ""
-            echo "========================================"
-          fi
-
-
-          # --------------------------------------------------
-          # CREATE ISSUE
-          # --------------------------------------------------
-
-          ISSUE_URL=$(gh issue create \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "$(cat /tmp/issue-title.txt)" \
-            --body-file /tmp/issue-body.txt)
-
-
-          # --------------------------------------------------
-          # RESULT
-          # --------------------------------------------------
+          TAG="$(cat /tmp/tag.txt)"
 
           echo ""
-          echo "Issue created:"
-          echo "$ISSUE_URL"
+          echo "========================================"
+          echo "[DEBUG] TESTING GITHUB FAILURE NOTIFICATION"
+          echo "Tag: $TAG"
+          echo "========================================"
+          echo ""
 
-          if [ "$DEBUG" = "true" ]; then
-            echo ""
-            echo "[DEBUG] COMPLETE"
-          fi
+          echo "::error title=$TAG::TEST FORM SUBMISSION"
+
+          exit 1
