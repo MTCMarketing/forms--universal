@@ -159,8 +159,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
         run: |
+          TAG=$(jq -r '.tag' /tmp/submission.json)
+
+          gh issue edit 3 \
+            --repo "${{ github.repository }}" \
+            --title "$TAG"
+
           gh issue comment 3 \
             --repo "${{ github.repository }}" \
             --body-file /tmp/submission.json
-
-     
