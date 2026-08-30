@@ -1,23 +1,50 @@
 name: Receive Form Submission
 
+env:
+  DEBUG: "true"
+
 on:
   repository_dispatch:
     types:
       - gform-submission
+
+permissions:
+  contents: read
+  issues: write
 
 jobs:
   receive:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Receive, decrypt and forward submission
+      - name: Receive, decrypt and create issue
         env:
           ENCRYPTED_CODE: ${{ github.event.client_payload.encrypted_code }}
           DECODER: ${{ secrets.DECODER }}
+          GH_TOKEN: ${{ github.token }}
 
         run: |
-          cat > /tmp/decode.mjs <<'EOF'
+          cat > /tmp/process.mjs <<'EOF'
           import crypto from "crypto";
+          import fs from "fs";
+
+          const DEBUG = process.env.DEBUG === "true";
+
+          function debug(message, data = undefined) {
+            if (!DEBUG) return;
+
+            console.log(`\n[DEBUG] ${message}`);
+
+            if (data !== undefined) {
+              if (typeof data === "object") {
+                console.log(JSON.stringify(data, null, 2));
+              } else {
+                console.log(data);
+              }
+            }
+          }
+
+          debug("1. Starting form submission processor");
 
           const encryptedCode = process.env.ENCRYPTED_CODE;
           const privateKey = process.env.DECODER;
@@ -26,9 +53,13 @@ jobs:
             throw new Error("No encrypted_code received");
           }
 
+          debug("2. Encrypted payload received");
+
           if (!privateKey) {
             throw new Error("DECODER secret is missing");
           }
+
+          debug("3. DECODER secret is present");
 
           const parsed = JSON.parse(encryptedCode);
 
@@ -36,7 +67,15 @@ jobs:
             throw new Error("Payload does not contain chunks[]");
           }
 
-          const decryptedChunks = parsed.chunks.map((chunk) => {
+          debug("4. Encrypted payload parsed", {
+            chunks: parsed.chunks.length
+          });
+
+          const decryptedChunks = parsed.chunks.map((chunk, index) => {
+            debug(
+              `5. Decrypting chunk ${index + 1}/${parsed.chunks.length}`
+            );
+
             return crypto.privateDecrypt(
               {
                 key: privateKey,
@@ -51,28 +90,71 @@ jobs:
             .concat(decryptedChunks)
             .toString("utf8");
 
+          debug("6. Decrypted plaintext", plaintext);
+
           const submission = JSON.parse(plaintext);
 
-          // Add routing tag
+          debug("7. Parsed submission", submission);
+
+          if (!submission.siteId) {
+            throw new Error("Submission does not contain siteId");
+          }
+
           submission.tag = `[raw][${submission.siteId}]`;
 
-          console.log("=== DECRYPTED FORM SUBMISSION ===");
-          console.log(JSON.stringify(submission));
-          console.log("=================================");
+          debug("8. Tag added", submission.tag);
 
-          // Save payload for curl
-          await import("fs").then(fs =>
-            fs.writeFileSync("/tmp/submission.json", JSON.stringify(submission))
-          );
+          debug("9. Final submission object", submission);
+
+          /*
+           * Issue title.
+           *
+           * This is intentionally the tag so it should appear
+           * prominently in GitHub's notification email.
+           */
+          const title = submission.tag;
+
+          /*
+           * Put the complete object into the issue body.
+           */
+          const body = JSON.stringify(submission, null, 2);
+
+          fs.writeFileSync("/tmp/issue-title.txt", title);
+          fs.writeFileSync("/tmp/issue-body.txt", body);
+
+          debug("10. Issue title", title);
+          debug("11. Issue body", body);
+          debug("12. Issue files created");
           EOF
 
-          node /tmp/decode.mjs
+          node /tmp/process.mjs
 
-          curl --fail-with-body -X POST \
-            'https://formsubmit.co/ajax/slapkommerce@gmail.com' \
-            -H 'Content-Type: application/json' \
-            -H 'Accept: application/json' \
-            -H 'Origin: https://mtcmarketing.github.io' \
-            -H 'Referer: https://mtcmarketing.github.io/' \
-            -H 'User-Agent: Mozilla/5.0' \
-            --data-binary '@/tmp/submission.json'
+          if [ "$DEBUG" = "true" ]; then
+            echo ""
+            echo "========================================"
+            echo "[DEBUG] 13. Creating GitHub issue"
+            echo ""
+            echo "[DEBUG] Repository:"
+            echo "$GITHUB_REPOSITORY"
+            echo ""
+            echo "[DEBUG] Title:"
+            cat /tmp/issue-title.txt
+            echo ""
+            echo "[DEBUG] Body:"
+            cat /tmp/issue-body.txt
+            echo ""
+            echo "========================================"
+          fi
+
+          ISSUE_URL=$(gh issue create \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$(cat /tmp/issue-title.txt)" \
+            --body-file /tmp/issue-body.txt)
+
+          if [ "$DEBUG" = "true" ]; then
+            echo ""
+            echo "========================================"
+            echo "[DEBUG] 14. Issue created successfully"
+            echo "[DEBUG] $ISSUE_URL"
+            echo "========================================"
+          fi
