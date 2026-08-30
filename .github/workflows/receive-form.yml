@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Receive, decrypt and create issue
+      - name: Decrypt submission and create issue
         env:
           ENCRYPTED_CODE: ${{ github.event.client_payload.encrypted_code }}
           DECODER: ${{ secrets.DECODER }}
@@ -44,7 +44,11 @@ jobs:
             }
           }
 
-          debug("1. Starting form submission processor");
+          // --------------------------------------------------
+          // 1. RECEIVE
+          // --------------------------------------------------
+
+          debug("1. Starting");
 
           const encryptedCode = process.env.ENCRYPTED_CODE;
           const privateKey = process.env.DECODER;
@@ -59,7 +63,12 @@ jobs:
             throw new Error("DECODER secret is missing");
           }
 
-          debug("3. DECODER secret is present");
+          debug("3. DECODER secret found");
+
+
+          // --------------------------------------------------
+          // 2. PARSE ENCRYPTED PAYLOAD
+          // --------------------------------------------------
 
           const parsed = JSON.parse(encryptedCode);
 
@@ -67,11 +76,17 @@ jobs:
             throw new Error("Payload does not contain chunks[]");
           }
 
-          debug("4. Encrypted payload parsed", {
+          debug("4. Payload parsed", {
             chunks: parsed.chunks.length
           });
 
+
+          // --------------------------------------------------
+          // 3. DECRYPT
+          // --------------------------------------------------
+
           const decryptedChunks = parsed.chunks.map((chunk, index) => {
+
             debug(
               `5. Decrypting chunk ${index + 1}/${parsed.chunks.length}`
             );
@@ -92,6 +107,11 @@ jobs:
 
           debug("6. Decrypted plaintext", plaintext);
 
+
+          // --------------------------------------------------
+          // 4. PARSE SUBMISSION
+          // --------------------------------------------------
+
           const submission = JSON.parse(plaintext);
 
           debug("7. Parsed submission", submission);
@@ -100,61 +120,101 @@ jobs:
             throw new Error("Submission does not contain siteId");
           }
 
+
+          // --------------------------------------------------
+          // 5. ADD TAG
+          // --------------------------------------------------
+
           submission.tag = `[raw][${submission.siteId}]`;
 
-          debug("8. Tag added", submission.tag);
+          debug("8. Tag created", submission.tag);
 
-          debug("9. Final submission object", submission);
 
-          /*
-           * Issue title.
-           *
-           * This is intentionally the tag so it should appear
-           * prominently in GitHub's notification email.
-           */
+          // --------------------------------------------------
+          // 6. BUILD ISSUE
+          // --------------------------------------------------
+
           const title = submission.tag;
 
           /*
-           * Put the complete object into the issue body.
+           * Keep the raw tag at the very beginning.
+           * This gives the eventual email parser a predictable
+           * marker before the JSON.
            */
-          const body = JSON.stringify(submission, null, 2);
 
-          fs.writeFileSync("/tmp/issue-title.txt", title);
-          fs.writeFileSync("/tmp/issue-body.txt", body);
+          const body =
+          `${submission.tag}
 
-          debug("10. Issue title", title);
-          debug("11. Issue body", body);
-          debug("12. Issue files created");
+          \`\`\`json
+          ${JSON.stringify(submission, null, 2)}
+          \`\`\`
+          `;
+
+          fs.writeFileSync(
+            "/tmp/issue-title.txt",
+            title
+          );
+
+          fs.writeFileSync(
+            "/tmp/issue-body.txt",
+            body
+          );
+
+          debug("9. Issue title", title);
+          debug("10. Issue body", body);
+
+          debug("11. Ready to create GitHub issue");
           EOF
 
           node /tmp/process.mjs
 
+
+          # --------------------------------------------------
+          # DEBUG
+          # --------------------------------------------------
+
           if [ "$DEBUG" = "true" ]; then
             echo ""
             echo "========================================"
-            echo "[DEBUG] 13. Creating GitHub issue"
+            echo "[DEBUG] ISSUE ABOUT TO BE CREATED"
+            echo "========================================"
+
             echo ""
-            echo "[DEBUG] Repository:"
+            echo "Repository:"
             echo "$GITHUB_REPOSITORY"
+
             echo ""
-            echo "[DEBUG] Title:"
+            echo "Title:"
             cat /tmp/issue-title.txt
+
             echo ""
-            echo "[DEBUG] Body:"
+            echo "Body:"
             cat /tmp/issue-body.txt
+
             echo ""
             echo "========================================"
           fi
+
+
+          # --------------------------------------------------
+          # CREATE ISSUE
+          # --------------------------------------------------
 
           ISSUE_URL=$(gh issue create \
             --repo "$GITHUB_REPOSITORY" \
             --title "$(cat /tmp/issue-title.txt)" \
             --body-file /tmp/issue-body.txt)
 
+
+          # --------------------------------------------------
+          # RESULT
+          # --------------------------------------------------
+
+          echo ""
+          echo "Issue created:"
+          echo "$ISSUE_URL"
+
           if [ "$DEBUG" = "true" ]; then
             echo ""
-            echo "========================================"
-            echo "[DEBUG] 14. Issue created successfully"
-            echo "[DEBUG] $ISSUE_URL"
-            echo "========================================"
+            echo "[DEBUG] COMPLETE"
           fi
