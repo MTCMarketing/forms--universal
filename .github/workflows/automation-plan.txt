@@ -1,0 +1,8 @@
+1. GitHub Settings → Notifications: Enable email notifications for Watching and Participating, @mentions and custom.
+2. Customize email updates: Enable Comments on Issues and Pull Requests and Includes your own updates.
+3. Repository → Watch → Custom: Enable Issues and click Apply.
+4. Create a permanent Issue: Create one Issue to receive all form-submission comments and keep it open.
+5. Workflow permissions: Give the GitHub Action permission to write to Issues.
+6. Decrypt submission: Have the Action decrypt the incoming form submission into JSON.
+7. Post comment: Have github-actions[bot] post the decrypted JSON as a comment on the permanent Issue.
+8. Receive email: GitHub emails every new comment to Gmail with the actual JSON content in the email body.
