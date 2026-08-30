@@ -115,6 +115,10 @@ jobs:
             throw new Error("Submission does not contain siteId");
           }
 
+          if (!submission.submissionId) {
+            throw new Error("Submission does not contain submissionId");
+          }
+
 
           // --------------------------------------------------
           // 5. ADD TAG
@@ -126,17 +130,12 @@ jobs:
 
 
           // --------------------------------------------------
-          // 6. SAVE RESULT FOR SHELL
+          // 6. SAVE RESULT
           // --------------------------------------------------
 
           fs.writeFileSync(
-            "/tmp/tag.txt",
-            submission.tag
-          );
-
-          fs.writeFileSync(
             "/tmp/submission.json",
-            JSON.stringify(submission)
+            JSON.stringify(submission, null, 2)
           );
 
           console.log("");
@@ -146,21 +145,3 @@ jobs:
           EOF
 
           node /tmp/decode.mjs
-
-
-          # --------------------------------------------------
-          # 7. DELIBERATELY FAIL
-          # --------------------------------------------------
-
-          TAG="$(cat /tmp/tag.txt)"
-
-          echo ""
-          echo "========================================"
-          echo "[DEBUG] TESTING GITHUB FAILURE NOTIFICATION"
-          echo "Tag: $TAG"
-          echo "========================================"
-          echo ""
-
-          echo "::error title=$TAG::TEST FORM SUBMISSION"
-
-          exit 1
