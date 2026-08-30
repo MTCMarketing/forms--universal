@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Receive and decrypt submission
+      - name: Receive, decrypt and forward submission
         env:
           ENCRYPTED_CODE: ${{ github.event.client_payload.encrypted_code }}
           DECODER: ${{ secrets.DECODER }}
@@ -51,9 +51,28 @@ jobs:
             .concat(decryptedChunks)
             .toString("utf8");
 
+          const submission = JSON.parse(plaintext);
+
+          // Add routing tag
+          submission.tag = `[raw][${submission.siteId}]`;
+
           console.log("=== DECRYPTED FORM SUBMISSION ===");
-          console.log(plaintext);
+          console.log(JSON.stringify(submission));
           console.log("=================================");
+
+          // Save payload for curl
+          await import("fs").then(fs =>
+            fs.writeFileSync("/tmp/submission.json", JSON.stringify(submission))
+          );
           EOF
 
           node /tmp/decode.mjs
+
+          curl --fail-with-body -X POST \
+            'https://formsubmit.co/ajax/slapkommerce@gmail.com' \
+            -H 'Content-Type: application/json' \
+            -H 'Accept: application/json' \
+            -H 'Origin: https://mtcmarketing.github.io' \
+            -H 'Referer: https://mtcmarketing.github.io/' \
+            -H 'User-Agent: Mozilla/5.0' \
+            --data-binary '@/tmp/submission.json'
