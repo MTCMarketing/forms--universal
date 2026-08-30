@@ -10,6 +10,7 @@ on:
 permissions:
   actions: write
   contents: write
+  issues: write
 
 jobs:
   cleanup:
@@ -39,7 +40,33 @@ jobs:
 
 
       # ============================================================
-      # 2. CHECKOUT CURRENT REPOSITORY STATE
+      # 2. DELETE ALL COMMENTS FROM RECEIVER ISSUE #3
+      # ============================================================
+
+      - name: Delete issue comments
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          echo "Deleting comments from issue #3"
+
+          gh api \
+            "/repos/$REPO/issues/3/comments?per_page=100" \
+            --paginate \
+            --jq '.[].id' |
+          while read -r COMMENT_ID; do
+            echo "Deleting comment $COMMENT_ID"
+
+            gh api \
+              --method DELETE \
+              "/repos/$REPO/issues/comments/$COMMENT_ID"
+          done
+
+          echo "All comments deleted from issue #3"
+
+
+      # ============================================================
+      # 3. CHECKOUT CURRENT REPOSITORY STATE
       # ============================================================
 
       - name: Checkout repository
@@ -50,7 +77,7 @@ jobs:
 
 
       # ============================================================
-      # 3. REPLACE HISTORY WITH CURRENT STATE
+      # 4. REPLACE HISTORY WITH CURRENT STATE
       # ============================================================
 
       - name: Delete commit history
