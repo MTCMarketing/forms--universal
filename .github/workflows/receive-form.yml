@@ -8,6 +8,10 @@ on:
     types:
       - gform-submission
 
+permissions:
+  contents: read
+  issues: write
+
 jobs:
   receive:
     runs-on: ubuntu-latest
@@ -145,3 +149,23 @@ jobs:
           EOF
 
           node /tmp/decode.mjs
+
+
+      # --------------------------------------------------
+      # 7. POST JSON AS COMMENT ON ISSUE #3
+      # --------------------------------------------------
+
+      - name: Post submission as issue comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+        run: |
+          {
+            echo '```json'
+            cat /tmp/submission.json
+            echo '```'
+          } > /tmp/comment.md
+
+          gh issue comment 3 \
+            --repo "${{ github.repository }}" \
+            --body-file /tmp/comment.md
