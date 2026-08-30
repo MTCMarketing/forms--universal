@@ -150,7 +150,6 @@ jobs:
 
           node /tmp/decode.mjs
 
-
       # --------------------------------------------------
       # 7. POST JSON AS COMMENT ON ISSUE #3
       # --------------------------------------------------
@@ -160,12 +159,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
         run: |
-          {
-            echo '```json'
-            cat /tmp/submission.json
-            echo '```'
-          } > /tmp/comment.md
-
           gh issue comment 3 \
             --repo "${{ github.repository }}" \
-            --body-file /tmp/comment.md
+            --body-file /tmp/submission.json
+
+     
