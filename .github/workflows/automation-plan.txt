@@ -6,3 +6,10 @@
 6. Decrypt submission: Have the Action decrypt the incoming form submission into JSON.
 7. Post comment: Have github-actions[bot] post the decrypted JSON as a comment on the permanent Issue.
 8. Receive email: GitHub emails every new comment to Gmail with the actual JSON content in the email body.
+
+
+
+
+
+zone5graphx.com
+websitewiseguys@gmail.com
