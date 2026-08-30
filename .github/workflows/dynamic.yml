@@ -1,0 +1,35 @@
+name: Dynamic YAML Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  dynamic-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Start
+        run: echo "Starting dynamic YAML test..."
+
+      - name: Read and execute dynamic YAML
+        env:
+          DYNAMIC_YML: ${{ secrets.DYNAMIC_YML }}
+        run: |
+          echo "$DYNAMIC_YML" > /tmp/dynamic.yml
+
+          echo "Dynamic YAML loaded."
+
+          COMMAND=$(yq -r '.run' /tmp/dynamic.yml)
+
+          echo "Executing dynamic command..."
+
+          if eval "$COMMAND"; then
+            echo "Dynamic YAML executed successfully."
+          else
+            echo "Dynamic YAML FAILED."
+            exit 1
+          fi
+
+      - name: Resume workflow
+        run: |
+          echo "SUCCESS: Workflow resumed after dynamic YAML."
